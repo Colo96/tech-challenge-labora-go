@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"os"
 	"strings"
-	"tech-challenge/models"
+	"tech-challenge/src/models"
 )
 
 // ParseEmailFile lee y parsea un archivo de correo electrónico.

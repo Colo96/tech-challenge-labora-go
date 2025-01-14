@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 	"sync"
-	"tech-challenge/models"
-	"tech-challenge/services"
-	"tech-challenge/utils"
+	"tech-challenge/src/models"
+	"tech-challenge/src/services"
+	"tech-challenge/src/utils"
 )
 
 var (

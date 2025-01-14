@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"tech-challenge/models"
+	"tech-challenge/src/models"
 )
 
 const (

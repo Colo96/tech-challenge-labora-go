@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"tech-challenge/models"
+	"tech-challenge/src/models"
 )
 
 // ExploreDirectory recorre un directorio recursivamente y procesa archivos de correos electrónicos.
