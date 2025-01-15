@@ -1,52 +1,47 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"sync"
 	"tech-challenge/src/models"
+	"tech-challenge/src/routes"
 	"tech-challenge/src/services"
 	"tech-challenge/src/utils"
-)
 
-var (
-	wg sync.WaitGroup
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	rootDir := "./maildir"
+	// Inicializar la base de datos y realizar la migración de las tablas
+	models.InitDB()
+	models.Migrate()
 
-	// Canal para recolectar correos procesados
+	// Inicializar el servidor y las rutas
+	r := gin.Default()
+	routes.SetupEmailRoutes(r)
+
+	// Canal para procesar los correos electrónicos de la carpeta "maildir"
 	emailChan := make(chan *models.Email)
-	// Canal para agrupar y enviar correos
-	batchChan := make(chan []*models.Email)
+	var wg sync.WaitGroup
 
-	// Goroutine para procesar y enviar lotes de correos
-	go services.ProcessAndSendEmails(batchChan)
-
-	// Goroutine para recolectar correos y enviarlos en lotes
+	// Exploración del directorio "maildir"
+	wg.Add(1)
 	go func() {
-		var batch []*models.Email
-		for email := range emailChan {
-			batch = append(batch, email)
-			if len(batch) >= services.BatchSize {
-				batchChan <- batch
-				batch = nil
-			}
+		defer wg.Done()
+		err := utils.ExploreDirectory("maildir", emailChan, &wg)
+		if err != nil {
+			log.Printf("Error al explorar el directorio: %v\n", err)
 		}
-		if len(batch) > 0 {
-			batchChan <- batch
-		}
-		close(batchChan)
 	}()
 
-	// Exploración de directorios y procesamiento de correos
-	if err := utils.ExploreDirectory(rootDir, emailChan, &wg); err != nil {
-		fmt.Println("Error al explorar el directorio:", err)
-		return
-	}
+	// Enviar los correos electrónicos a ZincSearch y PostgreSQL
+	go services.ProcessAndSendEmails(emailChan, models.DB)
 
+	// Esperar a que todas las goroutines finalicen
 	wg.Wait()
-	close(emailChan)
 
-	fmt.Println("Proceso completado.")
+	// Iniciar el servidor HTTP
+	if err := r.Run(":8080"); err != nil {
+		log.Fatalf("Error al iniciar el servidor: %v", err)
+	}
 }
