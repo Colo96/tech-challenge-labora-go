@@ -41,8 +41,8 @@ func main() {
 	r := gin.Default()
 	routes.SetupEmailRoutes(r)
 
-	// Canal para procesar los correos electrónicos de la carpeta "maildir"
-	emailChan := make(chan *models.Email)
+	// Canal para procesar lotes de correos electrónicos
+	emailChan := make(chan []*models.Email)
 	var wg sync.WaitGroup
 
 	// Exploración del directorio "maildir"

@@ -8,66 +8,82 @@ import (
 	"net/http"
 	"tech-challenge/src/models"
 
-	"gorm.io/gorm"
+	"github.com/jinzhu/gorm"
 )
 
 const (
-	BatchSize = 1000 // Tamaño de lote para el envío
+	// ZincSearch URL y autenticación
+	ZincUser     = "admin"
+	ZincPassword = "Complexpass#123"
 )
 
-// ProcessAndSendEmails procesa y envía lotes de correos electrónicos a ZincSearch.
+// ProcessAndSendEmails procesa lotes de correos electrónicos y los envía a ZincSearch y PostgreSQL.
 func ProcessAndSendEmails(batchChan chan []*models.Email, db *gorm.DB, zincURL, zincAPIKey string) {
 	for batch := range batchChan {
-		err := sendBatch(batch, zincURL, zincAPIKey)
+		err := sendBatch(batch, db, zincURL, zincAPIKey)
 		if err != nil {
-			log.Printf("Error al enviar el lote a ZincSearch: %v\n", err)
-		}
-
-		// Guardar los correos electrónicos en la base de datos
-		for _, email := range batch {
-			if err := saveEmailToDB(db, email); err != nil {
-				log.Printf("Error al guardar el correo en la base de datos: %v\n", err)
-			}
+			log.Printf("Error al enviar el lote de correos: %v\n", err)
 		}
 	}
 }
 
-func sendBatch(emails []*models.Email, zincURL, zincAPIKey string) error {
-	bulkData := map[string]interface{}{
-		"index":   "emails",
-		"records": emails,
-	}
-
-	data, err := json.Marshal(bulkData)
+// sendBatch envía un lote de correos electrónicos a ZincSearch y PostgreSQL.
+func sendBatch(batch []*models.Email, db *gorm.DB, zincURL, zincAPIKey string) error {
+	// Enviar a ZincSearch
+	err := sendToZincSearch(batch, zincURL, zincAPIKey)
 	if err != nil {
-		return fmt.Errorf("error al serializar los datos: %v", err)
+		return fmt.Errorf("error al enviar a ZincSearch: %v", err)
 	}
 
-	req, err := http.NewRequest("POST", zincURL, bytes.NewBuffer(data))
+	// Guardar en PostgreSQL
+	err = saveToPostgreSQL(batch, db)
 	if err != nil {
-		return fmt.Errorf("error al crear la solicitud: %v", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+zincAPIKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("error al enviar la solicitud: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("error del servidor, código HTTP: %d", resp.StatusCode)
+		return fmt.Errorf("error al guardar en PostgreSQL: %v", err)
 	}
 
 	return nil
 }
 
-// saveEmailToDB guarda el correo electrónico en la base de datos PostgreSQL
-func saveEmailToDB(db *gorm.DB, email *models.Email) error {
-	if err := db.Create(&email).Error; err != nil {
-		return fmt.Errorf("error al guardar el correo: %v", err)
+// sendToZincSearch envía el lote de correos electrónicos a ZincSearch.
+func sendToZincSearch(batch []*models.Email, zincURL, zincAPIKey string) error {
+	bulkData := map[string]interface{}{
+		"index":   "emails",
+		"records": batch,
+	}
+
+	data, err := json.Marshal(bulkData)
+	if err != nil {
+		return fmt.Errorf("error al serializar los datos para ZincSearch: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", zincURL, bytes.NewBuffer(data))
+	if err != nil {
+		return fmt.Errorf("error al crear la solicitud para ZincSearch: %v", err)
+	}
+
+	req.SetBasicAuth(ZincUser, ZincPassword)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("error al enviar la solicitud a ZincSearch: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("error del servidor ZincSearch, código HTTP: %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// saveToPostgreSQL guarda un lote de correos electrónicos en la base de datos PostgreSQL.
+func saveToPostgreSQL(batch []*models.Email, db *gorm.DB) error {
+	for _, email := range batch {
+		err := db.Create(email).Error
+		if err != nil {
+			return fmt.Errorf("error al guardar el correo en PostgreSQL: %v", err)
+		}
 	}
 	return nil
 }
