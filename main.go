@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"sync"
 	"tech-challenge/src/models"
 	"tech-challenge/src/routes"
@@ -9,12 +10,32 @@ import (
 	"tech-challenge/src/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
+func init() {
+	// Cargar las variables de entorno desde el archivo .env
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error al cargar el archivo .env: %v", err)
+	}
+}
+
 func main() {
+	// Obtener las variables de entorno para la base de datos
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
+	dbUser := os.Getenv("DB_USER")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	dbName := os.Getenv("DB_NAME")
+
 	// Inicializar la base de datos y realizar la migración de las tablas
-	models.InitDB()
+	models.InitDB(dbHost, dbPort, dbUser, dbPassword, dbName)
 	models.Migrate()
+
+	// Obtener las variables de entorno para ZincSearch
+	zincURL := os.Getenv("ZINCSEARCH_URL")
+	zincAPIKey := os.Getenv("ZINCSEARCH_API_KEY")
 
 	// Inicializar el servidor y las rutas
 	r := gin.Default()
@@ -35,7 +56,7 @@ func main() {
 	}()
 
 	// Enviar los correos electrónicos a ZincSearch y PostgreSQL
-	go services.ProcessAndSendEmails(emailChan, models.DB)
+	go services.ProcessAndSendEmails(emailChan, models.DB, zincURL, zincAPIKey)
 
 	// Esperar a que todas las goroutines finalicen
 	wg.Wait()
